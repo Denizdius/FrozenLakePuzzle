@@ -2,6 +2,7 @@ package com.frozenlake.model;
 
 import com.frozenlake.mechanics.ExperimentGoals;
 import com.frozenlake.exceptions.EquipmentException;
+import com.frozenlake.exceptions.GameException;
 import com.frozenlake.util.GameConstants;
 import java.util.Random;
 
@@ -28,7 +29,7 @@ public class ResearchEquipment extends Equipment {
     }
 
     @Override
-    public boolean canUseOn(Lake lake, Position position) throws EquipmentException {
+    public boolean canUseOn(Lake lake, Position position) throws GameException {
         if (isUsed()) {
             throw new EquipmentException(getName() + " has already been used");
         }
@@ -54,25 +55,36 @@ public class ResearchEquipment extends Equipment {
 
     @Override
     public void use(Lake lake, Position position) throws EquipmentException {
-        if (!canUseOn(lake, position)) {
-            throw new EquipmentException("Cannot use " + getName() + " here");
+        if (lake == null || position == null) {
+            throw new EquipmentException("Lake and position must not be null");
         }
 
-        switch (getExperimentType()) {
-            case TEMPERATURE_MEASUREMENT:
-                experimentResult = random.nextInt(31) - 30; // -30 to 0 Celsius
-                break;
-            case WINDSPEED_MEASUREMENT:
-                experimentResult = random.nextInt(31); // 0 to 30 m/s
-                break;
-            case CAMERA_PLACEMENT:
-                experimentResult = random.nextDouble() > 0.2; // 80% success rate
-                break;
-            default:
-                throw new EquipmentException("Unknown experiment type");
+        try {
+            if (!canUseOn(lake, position)) {
+                throw new EquipmentException("Cannot use " + getName() + " here");
+            }
+        } catch (GameException e) {
+            throw new EquipmentException("Error checking if equipment can be used: " + e.getMessage());
         }
-        
-        setUsed();
+
+        try {
+            switch (getExperimentType()) {
+                case TEMPERATURE_MEASUREMENT:
+                    experimentResult = random.nextInt(31) - 30; // -30 to 0 Celsius
+                    break;
+                case WINDSPEED_MEASUREMENT:
+                    experimentResult = random.nextInt(31); // 0 to 30 m/s
+                    break;
+                case CAMERA_PLACEMENT:
+                    experimentResult = random.nextDouble() > 0.2; // 80% success rate
+                    break;
+                default:
+                    throw new EquipmentException("Unknown experiment type");
+            }
+            setUsed();
+        } catch (Exception e) {
+            throw new EquipmentException("Error performing experiment: " + e.getMessage());
+        }
     }
 
     public Object getExperimentResult() {
@@ -106,15 +118,20 @@ public class ResearchEquipment extends Equipment {
         // Check adjacent cells for ice blocks
         for (Direction dir : Direction.values()) {
             Position adjacent = position.move(dir);
-            if (adjacent.isValid(lake.getRows(), lake.getColumns()) &&
-                lake.getCell(adjacent).equals(GameConstants.ICE_BLOCK)) {
-                return false;
+            if (adjacent.isValid(lake.getRows(), lake.getColumns())) {
+                try {
+                    if (lake.getCell(adjacent).equals(GameConstants.ICE_BLOCK)) {
+                        return false;
+                    }
+                } catch (GameException e) {
+                    throw new EquipmentException("Error checking adjacent cell: " + e.getMessage());
+                }
             }
         }
         return true;
     }
 
-    private boolean canPerformWindSpeedMeasurement(Lake lake, Position position) throws EquipmentException {
+    private boolean canPerformWindSpeedMeasurement(Lake lake, Position position) throws GameException {
         // Can be performed anywhere except next to hazards (except ice blocks)
         if (!isEmptyCell(lake, position)) {
             return false;
@@ -133,10 +150,14 @@ public class ResearchEquipment extends Equipment {
     }
 
     private boolean canPlaceCamera(Lake lake, Position position) throws EquipmentException {
-        return isEmptyCell(lake, position) && !hasHazardInLineOfSight(lake, position);
+        try {
+            return isEmptyCell(lake, position) && !hasHazardInLineOfSight(lake, position);
+        } catch (GameException e) {
+            throw new EquipmentException("Error checking for hazards in line of sight: " + e.getMessage());
+        }
     }
 
-    private boolean hasHazardInLineOfSight(Lake lake, Position position) throws EquipmentException {
+    private boolean hasHazardInLineOfSight(Lake lake, Position position) throws GameException {
         Position current = new Position(position.getRow(), position.getCol());
         while (current.getCol() < lake.getColumns() - 1) {
             current = current.move(Direction.RIGHT);

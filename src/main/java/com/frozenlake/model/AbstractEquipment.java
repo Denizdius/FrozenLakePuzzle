@@ -2,6 +2,7 @@ package com.frozenlake.model;
 
 import com.frozenlake.mechanics.ExperimentGoals;
 import com.frozenlake.exceptions.EquipmentException;
+import com.frozenlake.exceptions.GameException;
 import com.frozenlake.util.GameConstants;
 
 public abstract class AbstractEquipment {
@@ -47,11 +48,11 @@ public abstract class AbstractEquipment {
                position.isValid(lake.getRows(), lake.getColumns());
     }
     
-    protected boolean isEmptyCell(Lake lake, Position position) throws EquipmentException {
+    protected boolean isEmptyCell(Lake lake, Position position) throws GameException {
         return lake.getCell(position).equals(GameConstants.EMPTY);
     }
     
-    protected boolean isHazard(Lake lake, Position position) throws EquipmentException {
+    protected boolean isHazard(Lake lake, Position position) throws GameException {
         return lake.isHazard(position);
     }
 } 

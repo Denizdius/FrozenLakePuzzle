@@ -1,10 +1,8 @@
 package com.frozenlake.model;
 
-import com.frozenlake.mechanics.Direction;
-
 public class Position {
-    private int row;
-    private int col;
+    private final int row;
+    private final int col;
 
     public Position(int row, int col) {
         this.row = row;
@@ -19,27 +17,11 @@ public class Position {
         return col;
     }
 
-    public void setRow(int row) {
-        this.row = row;
-    }
-
-    public void setCol(int col) {
-        this.col = col;
-    }
-
-    public Position move(Direction direction) {
-        switch (direction) {
-            case UP:
-                return new Position(row - 1, col);
-            case DOWN:
-                return new Position(row + 1, col);
-            case LEFT:
-                return new Position(row, col - 1);
-            case RIGHT:
-                return new Position(row, col + 1);
-            default:
-                return new Position(row, col);
-        }
+    public Position move(Direction dir) {
+        return new Position(
+            row + dir.getRowDelta(),
+            col + dir.getColDelta()
+        );
     }
 
     public boolean isValid(int maxRows, int maxCols) {
@@ -47,20 +29,15 @@ public class Position {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (!(obj instanceof Position)) return false;
-        Position other = (Position) obj;
-        return row == other.row && col == other.col;
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Position)) return false;
+        Position position = (Position) o;
+        return row == position.row && col == position.col;
     }
 
     @Override
     public int hashCode() {
         return 31 * row + col;
     }
-
-    @Override
-    public String toString() {
-        return String.format("(%d, %d)", row, col);
-    }
-} 
+}

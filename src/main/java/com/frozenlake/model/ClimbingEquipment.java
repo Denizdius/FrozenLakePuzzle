@@ -1,6 +1,7 @@
 package com.frozenlake.model;
 
 import com.frozenlake.exceptions.EquipmentException;
+import com.frozenlake.exceptions.GameException;
 import com.frozenlake.util.GameConstants;
 
 public class ClimbingEquipment extends HazardHandlingEquipment {
@@ -10,10 +11,14 @@ public class ClimbingEquipment extends HazardHandlingEquipment {
 
     @Override
     public void use(Lake lake, Position position) throws EquipmentException {
-        if (!canUseOn(lake, position)) {
-            throw new EquipmentException("Cannot use climbing equipment here");
+        try {
+            if (!canUseOn(lake, position)) {
+                throw new EquipmentException("Cannot use climbing equipment here", null);
+            }
+            lake.setCell(position, GameConstants.CLIMBED);
+            setUsed();
+        } catch (GameException e) {
+            throw new EquipmentException("Game exception occurred while using climbing equipment", e);
         }
-        lake.setCell(position, GameConstants.CLIMBED);
-        setUsed();
     }
 } 

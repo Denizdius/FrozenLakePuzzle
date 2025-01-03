@@ -2,6 +2,8 @@ package com.frozenlake.mechanics;
 
 import java.util.*;
 import com.frozenlake.model.Equipment;
+import com.frozenlake.model.Researcher;
+import com.frozenlake.exceptions.GameException;
 
 public class GameState {
     private final Map<String, Set<ExperimentGoals.ExperimentType>> completedExperiments;
@@ -10,7 +12,11 @@ public class GameState {
     private final List<ExperimentGoals.ExperimentType> requiredExperiments;
     private int score;
 
-    public GameState(List<ExperimentGoals.ExperimentType> requiredExperiments, Queue<String> researchers) {
+    public GameState(List<ExperimentGoals.ExperimentType> requiredExperiments, Queue<Researcher> researchers) {
+        if (requiredExperiments == null || researchers == null) {
+            throw new IllegalArgumentException("Required experiments and researchers cannot be null");
+        }
+        
         this.requiredExperiments = new ArrayList<>(requiredExperiments);
         this.completedExperiments = new HashMap<>();
         this.activeResearchers = new HashSet<>();
@@ -19,29 +25,52 @@ public class GameState {
         
         // Initialize active researchers
         researchers.forEach(r -> {
-            activeResearchers.add(r);
-            completedExperiments.put(r, new HashSet<>());
+            if (r != null) {
+                activeResearchers.add(r.getId());
+                completedExperiments.put(r.getId(), new HashSet<>());
+            }
         });
+        
+        if (activeResearchers.isEmpty()) {
+            throw new IllegalArgumentException("No valid researchers provided");
+        }
     }
 
-    public void recordExperiment(String researcher, ExperimentGoals.ExperimentType experimentType) {
-        completedExperiments.get(researcher).add(experimentType);
+    public void recordExperiment(String researcher, ExperimentGoals.ExperimentType experimentType) throws GameException {
+        if (researcher == null || experimentType == null) {
+            throw new GameException("Researcher ID and experiment type cannot be null");
+        }
+        
+        Set<ExperimentGoals.ExperimentType> experiments = completedExperiments.get(researcher);
+        if (experiments == null) {
+            throw new GameException("Unknown researcher: " + researcher);
+        }
+        
+        experiments.add(experimentType);
         checkExperimentCompletion();
     }
 
-    public void researcherFinished(String researcher) {
+    public void researcherFinished(String researcher) throws GameException {
+        if (researcher == null || !activeResearchers.contains(researcher)) {
+            throw new GameException("Invalid researcher ID: " + researcher);
+        }
         activeResearchers.remove(researcher);
         finishedResearchers.add(researcher);
     }
 
-    public void researcherFell(String researcher) {
+    public void researcherFell(String researcher) throws GameException {
+        if (researcher == null || !activeResearchers.contains(researcher)) {
+            throw new GameException("Invalid researcher ID: " + researcher);
+        }
         activeResearchers.remove(researcher);
         score -= 20; // Penalty for falling
     }
 
-    public void useEquipment(Equipment equipment) {
-        // Small score penalty for using equipment
-        score -= 5;
+    public void useEquipment(Equipment equipment) throws GameException {
+        if (equipment == null) {
+            throw new GameException("Equipment cannot be null");
+        }
+        score -= 5; // Small score penalty for using equipment
     }
 
     public boolean isGameOver() {
@@ -71,7 +100,6 @@ public class GameState {
     }
 
     private void checkExperimentCompletion() {
-        // Bonus points for completing experiments
         Set<ExperimentGoals.ExperimentType> allCompleted = new HashSet<>();
         completedExperiments.values().forEach(allCompleted::addAll);
         

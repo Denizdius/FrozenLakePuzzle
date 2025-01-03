@@ -32,7 +32,7 @@ public class FrozenLakePuzzleApp {
             this.lake = initializer.getLake();
             this.researchers = new LinkedList<>();
             this.experimentGoals = new ExperimentGoals();
-            this.lakePrinter = new LakePrinter();
+            this.lakePrinter = new LakePrinter(ROWS, COLUMNS);
             this.equipmentStorage = new EquipmentStorage();
             
             // Create researchers
@@ -41,7 +41,7 @@ public class FrozenLakePuzzleApp {
             // Generate experiment goals
             experimentGoals.generateExperimentGoals(researchers.size());
             
-            // Initialize game state
+            // Initialize game state with researchers
             this.gameState = new GameState(experimentGoals.getExperimentGoals(), researchers);
         }
 
@@ -90,42 +90,48 @@ public class FrozenLakePuzzleApp {
         }
 
         private void handleResearcherTurn(Researcher researcher) {
-            // Equipment selection phase
-            handleEquipmentSelection(researcher);
+            try {
+                // Equipment selection phase
+                handleEquipmentSelection(researcher);
 
-            // Movement phase
-            boolean continueMoving = true;
-            while (continueMoving && !gameState.isGameOver()) {
-                lakePrinter.printLake(lake);
-                showAvailableActions(researcher);
-                
-                String action = getValidInput("[1-3]", "Choose action: ").toLowerCase();
-                try {
-                    switch (action) {
-                        case "1":
-                            continueMoving = handleMovement(researcher);
-                            break;
-                        case "2":
-                            handleExperiment(researcher);
-                            break;
-                        case "3":
-                            continueMoving = false;
-                            break;
-                        default:
-                            System.out.println("Invalid action. Please try again.");
+                // Movement phase
+                boolean continueMoving = true;
+                while (continueMoving && !gameState.isGameOver()) {
+                    lakePrinter.printLake(lake);
+                    showAvailableActions(researcher);
+                    
+                    String action = getValidInput("[1-3]", "Choose action: ").toLowerCase();
+                    try {
+                        switch (action) {
+                            case "1":
+                                continueMoving = handleMovement(researcher);
+                                break;
+                            case "2":
+                                handleExperiment(researcher);
+                                break;
+                            case "3":
+                                continueMoving = false;
+                                break;
+                            default:
+                                System.out.println("Invalid action. Please try again.");
+                        }
+                    } catch (GameException e) {
+                        System.out.println("Error: " + e.getMessage());
                     }
-                } catch (GameException e) {
-                    System.out.println(e.getMessage());
                 }
-            }
 
-            // End of turn
-            if (!gameState.isGameOver()) {
-                researchers.poll();
-                if (researchers.isEmpty() && !gameState.isAllExperimentsCompleted()) {
-                    // Reset queue if experiments not completed
-                    gameState.getActiveResearchers().forEach(r -> researchers.offer(new Researcher(r, new Position(0, 0))));
+                // End of turn
+                if (!gameState.isGameOver()) {
+                    researchers.poll();
+                    if (researchers.isEmpty() && !gameState.isAllExperimentsCompleted()) {
+                        // Reset queue if experiments not completed
+                        for (String researcherId : gameState.getActiveResearchers()) {
+                            researchers.offer(new Researcher(researcherId, new Position(0, 0)));
+                        }
+                    }
                 }
+            } catch (Exception e) {
+                System.out.println("An unexpected error occurred: " + e.getMessage());
             }
         }
 
@@ -192,6 +198,7 @@ public class FrozenLakePuzzleApp {
 
             Equipment equipment = researcher.getEquipmentBag().findResearchEquipment(equipmentCode);
             equipment.use(lake, researcher.getPosition());
+            gameState.useEquipment(equipment);
             
             if (equipment instanceof ResearchEquipment) {
                 ResearchEquipment researchEquip = (ResearchEquipment) equipment;
@@ -245,6 +252,10 @@ public class FrozenLakePuzzleApp {
         }
 
         private void moveResearcher(Researcher researcher, Position newPosition) throws GameException {
+            if (researcher == null || newPosition == null) {
+                throw new GameException("Researcher and position cannot be null");
+            }
+
             Position oldPosition = researcher.getPosition();
             lake.moveResearcher(researcher.getId(), oldPosition, newPosition);
             researcher.setPosition(newPosition);
@@ -256,11 +267,16 @@ public class FrozenLakePuzzleApp {
         }
 
         private void handleHazard(Researcher researcher, Position position) throws GameException {
+            if (researcher == null || position == null) {
+                throw new GameException("Researcher and position cannot be null");
+            }
+
             String hazard = lake.getCell(position);
             Equipment hazardEquipment = researcher.getEquipmentBag().findEquipmentForHazard(hazard);
 
             if (hazardEquipment != null) {
                 hazardEquipment.use(lake, position);
+                gameState.useEquipment(hazardEquipment);
                 System.out.println("Used " + hazardEquipment.getName() + " to handle hazard!");
             } else if (hazard.equals(GameConstants.CLIFF_EDGE)) {
                 System.out.println(researcher.getDisplayName() + " fell into the cliff edge!");

@@ -1,6 +1,7 @@
 package com.frozenlake.model;
 
 import com.frozenlake.exceptions.EquipmentException;
+import com.frozenlake.exceptions.GameException;
 import com.frozenlake.util.GameConstants;
 import com.frozenlake.mechanics.ExperimentGoals;
 import java.util.Random;
@@ -17,13 +18,17 @@ public class ChiselingEquipment extends HazardHandlingEquipment {
     public ExperimentGoals.ExperimentType getExperimentType() {
         return ExperimentGoals.ExperimentType.GLACIAL_SAMPLING;
     }
-
     @Override
     public void use(Lake lake, Position position) throws EquipmentException {
-        if (!canUseOn(lake, position)) {
-            throw new EquipmentException("Cannot use chiseling equipment here");
-        }
-        
+        if (!canUseOn(lake, position))
+            try {
+                {
+                    throw new EquipmentException("Cannot use chiseling equipment here", null);
+                }
+            } catch (EquipmentException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
         // Take glacial sample (1-20 grams)
         sampleWeight = random.nextInt(20) + 1;
         

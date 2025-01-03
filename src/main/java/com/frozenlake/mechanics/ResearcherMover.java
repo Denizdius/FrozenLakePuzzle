@@ -1,21 +1,22 @@
 package com.frozenlake.mechanics;
 
-import java.util.Queue;
-import java.util.Scanner;
+import java.util.*;
 import com.frozenlake.exceptions.*;
 import com.frozenlake.equipment.*;
 import com.frozenlake.model.*;
 import com.frozenlake.ui.LakePrinter;
+import com.frozenlake.model.Direction;
+import com.frozenlake.util.GameConstants;
 
 public class ResearcherMover {
-    private static final String EMPTY = "  ";
-    private static final String ENTRANCE = "E ";
-    private static final String CLIFF_EDGE = "CE";
-    private static final String ICE_BLOCK = "IB";
-    private static final String ICE_SPIKES = "IS";
-    private static final String HOLE_IN_ICE = "HI";
-    private static final String BRIDGE = "BR";
-    private static final String CLIMBED = "CL";
+    private static final String EMPTY = GameConstants.EMPTY;
+    private static final String ENTRANCE = GameConstants.ENTRANCE;
+    private static final String CLIFF_EDGE = GameConstants.CLIFF_EDGE;
+    private static final String ICE_BLOCK = GameConstants.ICE_BLOCK;
+    private static final String ICE_SPIKES = GameConstants.ICE_SPIKES;
+    private static final String HOLE_IN_ICE = GameConstants.HOLE_IN_ICE;
+    private static final String BRIDGE = GameConstants.BRIDGE;
+    private static final String CLIMBED = GameConstants.CLIMBED;
 
     private final int rows;
     private final int columns;
@@ -24,121 +25,122 @@ public class ResearcherMover {
     private final ExperimentPerformer experimentPerformer;
     private EquipmentBag<Equipment> currentEquipmentBag;
 
-    public ResearcherMover(int rows, int columns, Queue<String> researchers, List<ExperimentGoals.ExperimentType> goals) {
+    public ResearcherMover(int rows, int columns, Queue<String> researchers, List<ExperimentGoals.ExperimentType> goals) throws GameException {
+        if (rows <= 0 || columns <= 0) {
+            throw new GameException("Invalid lake dimensions");
+        }
+        if (researchers == null || researchers.isEmpty()) {
+            throw new GameException("Researchers queue cannot be null or empty");
+        }
+        if (goals == null || goals.isEmpty()) {
+            throw new GameException("Experiment goals cannot be null or empty");
+        }
+
         this.rows = rows;
         this.columns = columns;
         this.equipmentStorage = new EquipmentStorage();
-        this.gameState = new GameState(goals, researchers);
+        this.currentEquipmentBag = new EquipmentBag<>();
+        
+        // Initialize researchers at the entrance position (0, columns-1)
+        Position entrancePosition = new Position(0, columns-1);
+        Queue<Researcher> researcherQueue = new LinkedList<>();
+        for (String r : researchers) {
+            researcherQueue.offer(new Researcher(r, entrancePosition));
+        }
+        
+        this.gameState = new GameState(goals, researcherQueue);
         this.experimentPerformer = new ExperimentPerformer();
-        this.currentEquipmentBag = null;
     }
 
-    public void move(String[][] lake, Queue<String> researchers, LakePrinter lakePrinter, Scanner scanner) {
+    public void move(Lake lake, Queue<String> researchers, LakePrinter lakePrinter, Scanner scanner) {
         while (!gameState.isGameOver() && !researchers.isEmpty()) {
             String currentResearcher = researchers.peek();
+            if (currentResearcher == null) break;
+
             System.out.println("\n=====> " + getResearcherName(currentResearcher) + "'s turn");
             
-            // Equipment selection phase
-            currentEquipmentBag = selectEquipment(currentResearcher, scanner);
-            
-            // Movement phase
-            boolean continueMoving = true;
-            while (continueMoving && !gameState.isGameOver()) {
-                lakePrinter.printLake(lake);
-                Position position = findResearcher(lake, currentResearcher);
+            try {
+                // Equipment selection phase
+                currentEquipmentBag = selectEquipment(currentResearcher, scanner);
                 
-                if (position == null) {
-                    System.out.println("Researcher not found on the lake!");
-                    break;
-                }
+                // Movement phase
+                boolean continueMoving = true;
+                while (continueMoving && !gameState.isGameOver()) {
+                    try {
+                        lakePrinter.printLake(lake);
+                        Position pos = findResearcher(lake, currentResearcher);
+                        
+                        if (pos == null) {
+                            System.out.println("Researcher not found on the lake!");
+                            break;
+                        }
 
-                // Show available actions
-                showAvailableActions(currentEquipmentBag);
-                String action = scanner.nextLine().trim().toLowerCase();
+                        showAvailableActions(currentEquipmentBag);
+                        String action = scanner.nextLine().trim().toLowerCase();
 
-                try {
-                    switch (action) {
-                        case "m": // Move
-                            continueMoving = handleMovement(lake, currentResearcher, position, scanner);
-                            break;
-                        case "e": // Use equipment
-                            handleEquipmentUsage(lake, currentResearcher, position, currentEquipmentBag, scanner);
-                            break;
-                        case "f": // Finish turn
-                            continueMoving = false;
-                            break;
-                        case "q": // Quit game
-                            System.out.println("Game ended by user.");
-                            return;
-                        default:
-                            System.out.println("Invalid action. Please try again.");
+                        switch (action) {
+                            case "m":
+                                continueMoving = handleMovement(lake, currentResearcher, pos, scanner);
+                                break;
+                            case "e":
+                                if (currentEquipmentBag.hasUnusedEquipment()) {
+                                    handleEquipmentUsage(lake, currentResearcher, pos, currentEquipmentBag, scanner);
+                                } else {
+                                    System.out.println("No unused equipment available.");
+                                }
+                                break;
+                            case "f":
+                                continueMoving = false;
+                                break;
+                            case "q":
+                                System.out.println("Game ended by user.");
+                                return;
+                            default:
+                                System.out.println("Invalid action. Please try again.");
+                        }
+                    } catch (GameException e) {
+                        System.out.println("Error: " + e.getMessage());
+                        continueMoving = false;
                     }
-                } catch (GameException e) {
-                    System.out.println(e.getMessage());
                 }
-            }
 
-            // End of turn
-            if (!gameState.isGameOver()) {
-                researchers.poll(); // Remove current researcher from queue
-                if (researchers.isEmpty() && !gameState.isAllExperimentsCompleted()) {
-                    // Reset queue if experiments not completed
-                    gameState.getActiveResearchers().forEach(researchers::offer);
+                // End of turn
+                if (!gameState.isGameOver()) {
+                    String removed = researchers.poll();
+                    if (researchers.isEmpty() && !gameState.isAllExperimentsCompleted()) {
+                        for (String r : gameState.getActiveResearchers()) {
+                            researchers.offer(r);
+                        }
+                    }
                 }
+            } catch (GameException e) {
+                System.out.println("Fatal error: " + e.getMessage());
+                break;
+            } finally {
+                currentEquipmentBag = null;
             }
-            
-            // Clear current equipment bag at end of turn
-            currentEquipmentBag = null;
         }
 
-        // Game over
         printGameResults();
     }
 
-    private EquipmentBag<Equipment> selectEquipment(String researcher, Scanner scanner) {
-        EquipmentBag<Equipment> equipmentBag = new EquipmentBag<>();
-        
-        System.out.println("\nAvailable equipment:");
-        System.out.println("[td] Temperature Detector");
-        System.out.println("[ws] Wind Speed Detector");
-        System.out.println("[cm] Camera");
-        System.out.println("[ch] Chiseling Equipment");
-        System.out.println("[cl] Climbing Equipment");
-        System.out.println("[wb] Large Wooden Board");
-        System.out.println("[no] Finish selection");
-
-        while (true) {
-            try {
-                if (equipmentBag.getItems().size() >= 3) {
-                    System.out.println("Maximum equipment capacity reached.");
-                    break;
+    private Position findResearcher(Lake lake, String researcher) throws GameException {
+        if (lake == null || researcher == null) {
+            throw new GameException("Invalid lake or researcher");
+        }
+        for (int i = 0; i < lake.getRows(); i++) {
+            for (int j = 0; j < lake.getColumns(); j++) {
+                Position pos = new Position(i, j);
+                if (researcher.equals(lake.getCell(pos))) {
+                    return pos;
                 }
-
-                System.out.print("Select equipment (or 'no' to finish): ");
-                String choice = scanner.nextLine().trim().toLowerCase();
-
-                if (choice.equals("no")) break;
-
-                if (!equipmentStorage.isAvailable(choice)) {
-                    System.out.println("Invalid or unavailable equipment.");
-                    continue;
-                }
-
-                Equipment equipment = equipmentStorage.getEquipment(choice);
-                equipmentBag.addEquipment(equipment);
-                System.out.println("Added " + equipment.getName() + " to bag.");
-                System.out.println("Current bag: " + equipmentBag.getItems());
-
-            } catch (EquipmentException e) {
-                System.out.println(e.getMessage());
             }
         }
-
-        return equipmentBag;
+        return null;
     }
 
-    private boolean handleMovement(String[][] lake, String researcher, Position position, Scanner scanner) 
-            throws MovementException {
+    private boolean handleMovement(Lake lake, String researcher, Position position, Scanner scanner) 
+            throws GameException {
         System.out.println("Choose direction ([U]p, [D]own, [L]eft, [R]ight): ");
         String direction = scanner.nextLine().trim().toLowerCase();
 
@@ -147,95 +149,91 @@ public class ResearcherMover {
         }
 
         Position newPosition = calculateNewPosition(lake, position, direction);
-        
-        // Check if movement is valid
-        if (isValidMove(lake, newPosition)) {
-            // Clear current position
-            lake[position.row][position.col] = EMPTY;
+        if (!isValidMove(lake, newPosition)) {
+            throw new MovementException("Cannot move in that direction.");
+        }
+
+        try {
+            lake.setCell(position, EMPTY);
+            String cellContent = lake.getCell(newPosition);
             
-            // Check for hazards at new position
-            String cellContent = lake[newPosition.row][newPosition.col];
-            if (isHazard(cellContent)) {
+            if (lake.isHazard(newPosition)) {
                 if (cellContent.equals(CLIFF_EDGE)) {
                     handleHazard(lake, researcher, newPosition);
                     return false;
+                }
+                
+                Equipment hazardEquipment = findHazardEquipment(currentEquipmentBag, cellContent);
+                if (hazardEquipment != null) {
+                    hazardEquipment.use(lake, newPosition);
+                    gameState.useEquipment(hazardEquipment);
+                    System.out.println("Used " + hazardEquipment.getName() + " to handle hazard!");
                 } else {
-                    // Try to handle other hazards with equipment
-                    Equipment hazardEquipment = findHazardEquipment(currentEquipmentBag, cellContent);
-                    if (hazardEquipment != null) {
-                        try {
-                            hazardEquipment.use(lake, newPosition.row, newPosition.col);
-                            gameState.useEquipment(hazardEquipment);
-                            System.out.println("Used " + hazardEquipment.getName() + " to handle hazard!");
-                        } catch (EquipmentException e) {
-                            System.out.println("Failed to use equipment: " + e.getMessage());
-                            return false;
-                        }
-                    } else {
-                        System.out.println("No suitable equipment to handle this hazard!");
-                        return false;
-                    }
+                    System.out.println("No suitable equipment to handle this hazard!");
+                    lake.setCell(position, researcher); // Move back
+                    return false;
                 }
             }
             
-            // Move researcher
-            lake[newPosition.row][newPosition.col] = researcher;
+            lake.setCell(newPosition, researcher);
             return true;
+        } catch (GameException e) {
+            // Restore original position on error
+            try {
+                lake.setCell(position, researcher);
+            } catch (GameException ex) {
+                // If we can't restore position, throw original error
+                throw e;
+            }
+            throw new MovementException("Error during movement: " + e.getMessage());
         }
-        
-        throw new MovementException("Cannot move in that direction.");
     }
 
-    private Equipment findHazardEquipment(EquipmentBag<Equipment> equipmentBag, String hazardType) {
-        if (equipmentBag == null) return null;
-        return equipmentBag.findEquipmentForHazard(hazardType);
-    }
+    private Position calculateNewPosition(Lake lake, Position start, String direction) throws GameException {
+        if (lake == null || start == null) {
+            throw new GameException("Invalid lake or position");
+        }
 
-    private Position calculateNewPosition(String[][] lake, Position start, String direction) {
-        Position newPos = new Position(start.row, start.col);
-        
+        Direction dir;
         switch (direction) {
-            case "u":
-                while (newPos.row > 0 && canMoveThrough(lake[newPos.row - 1][newPos.col])) {
-                    newPos.row--;
-                }
-                break;
-            case "d":
-                while (newPos.row < rows - 1 && canMoveThrough(lake[newPos.row + 1][newPos.col])) {
-                    newPos.row++;
-                }
-                break;
-            case "l":
-                while (newPos.col > 0 && canMoveThrough(lake[newPos.row][newPos.col - 1])) {
-                    newPos.col--;
-                }
-                break;
-            case "r":
-                while (newPos.col < columns - 1 && canMoveThrough(lake[newPos.row][newPos.col + 1])) {
-                    newPos.col++;
-                }
-                break;
+            case "u": dir = Direction.UP; break;
+            case "d": dir = Direction.DOWN; break;
+            case "l": dir = Direction.LEFT; break;
+            case "r": dir = Direction.RIGHT; break;
+            default: throw new MovementException("Invalid direction");
         }
         
-        return newPos;
+        Position current = start;
+        Position next = current.move(dir);
+        
+        while (next.isValid(rows, columns) && canMoveThrough(lake, next)) {
+            current = next;
+            next = current.move(dir);
+        }
+        
+        return current;
     }
 
-    private boolean canMoveThrough(String cell) {
+    private boolean canMoveThrough(Lake lake, Position pos) throws GameException {
+        if (lake == null || pos == null) {
+            return false;
+        }
+        String cell = lake.getCell(pos);
         return cell.equals(EMPTY) || cell.equals(BRIDGE) || cell.equals(CLIMBED) || cell.equals(CLIFF_EDGE);
     }
 
-    private void handleEquipmentUsage(String[][] lake, String researcher, Position position, 
-            EquipmentBag<Equipment> equipmentBag, Scanner scanner) throws EquipmentException {
-        if (!equipmentBag.hasUnusedEquipment()) {
-            throw new EquipmentException("No unused equipment available.");
+    private void handleEquipmentUsage(Lake lake, String researcher, Position position, 
+            EquipmentBag<Equipment> equipmentBag, Scanner scanner) throws GameException {
+        if (equipmentBag == null || !equipmentBag.hasUnusedEquipment()) {
+            throw new GameException("No unused equipment available.");
         }
 
         System.out.println("\nAvailable equipment: ");
-        equipmentBag.getItems().forEach(e -> {
+        for (Equipment e : equipmentBag.getItems()) {
             if (!e.isUsed()) {
                 System.out.println("- " + e.getName() + " [" + e.getShortName() + "]");
             }
-        });
+        }
 
         System.out.print("Enter equipment code to use (or 'cancel'): ");
         String choice = scanner.nextLine().trim().toLowerCase();
@@ -244,10 +242,10 @@ public class ResearcherMover {
 
         Equipment equipment = equipmentBag.findResearchEquipment(choice);
         if (equipment == null) {
-            throw new EquipmentException("Invalid equipment selection.");
+            throw new GameException("Invalid equipment selection.");
         }
 
-        equipment.use(lake, position.row, position.col);
+        equipment.use(lake, position);
         gameState.useEquipment(equipment);
         
         if (equipment instanceof ResearchEquipment) {
@@ -257,41 +255,32 @@ public class ResearcherMover {
         }
     }
 
-    private void handleHazard(String[][] lake, String researcher, Position position) {
-        String hazard = lake[position.row][position.col];
+    private void handleHazard(Lake lake, String researcher, Position position) throws GameException {
+        String hazard = lake.getCell(position);
         if (hazard.equals(CLIFF_EDGE)) {
             System.out.println(getResearcherName(researcher) + " fell into the cliff edge!");
             gameState.researcherFell(researcher);
         }
     }
 
-    private Position findResearcher(String[][] lake, String researcher) {
-        for (int i = 0; i < lake.length; i++) {
-            for (int j = 0; j < lake[i].length; j++) {
-                if (lake[i][j].equals(researcher)) {
-                    return new Position(i, j);
-                }
-            }
+    private boolean isValidMove(Lake lake, Position position) throws GameException {
+        if (lake == null || position == null) {
+            throw new GameException("Invalid lake or position");
         }
-        return null;
+        return position.isValid(lake.getRows(), lake.getColumns());
     }
 
-    private boolean isValidMove(String[][] lake, Position position) {
-        return position.row >= 0 && position.row < rows && 
-               position.col >= 0 && position.col < columns;
-    }
-
-    private boolean isHazard(String cellContent) {
-        return cellContent.equals(CLIFF_EDGE) || 
-               cellContent.equals(ICE_SPIKES) || 
-               cellContent.equals(HOLE_IN_ICE) || 
-               cellContent.equals(ICE_BLOCK);
+    private Equipment findHazardEquipment(EquipmentBag<Equipment> equipmentBag, String hazardType) {
+        if (equipmentBag == null || hazardType == null) {
+            return null;
+        }
+        return equipmentBag.findEquipmentForHazard(hazardType);
     }
 
     private void showAvailableActions(EquipmentBag<Equipment> equipmentBag) {
         System.out.println("\nAvailable actions:");
         System.out.println("[M] Move");
-        if (equipmentBag.hasUnusedEquipment()) {
+        if (equipmentBag != null && equipmentBag.hasUnusedEquipment()) {
             System.out.println("[E] Use equipment");
         }
         System.out.println("[F] Finish turn");
@@ -300,7 +289,7 @@ public class ResearcherMover {
     }
 
     private String getResearcherName(String id) {
-        return "Researcher " + id.substring(1);
+        return id == null ? "Unknown" : "Researcher " + id.substring(1);
     }
 
     private void printGameResults() {
@@ -314,12 +303,38 @@ public class ResearcherMover {
         System.out.println("Researchers who finished: " + gameState.getFinishedResearchers());
     }
 
-    private static class Position {
-        int row, col;
+    private EquipmentBag<Equipment> selectEquipment(String researcher, Scanner scanner) throws GameException {
+        EquipmentBag<Equipment> equipmentBag = new EquipmentBag<>();
         
-        Position(int row, int col) {
-            this.row = row;
-            this.col = col;
+        System.out.println("\nAvailable equipment:");
+        System.out.println("[td] Temperature Detector");
+        System.out.println("[ws] Wind Speed Detector");
+        System.out.println("[cm] Camera");
+        System.out.println("[ch] Chiseling Equipment");
+        System.out.println("[cl] Climbing Equipment");
+        System.out.println("[wb] Large Wooden Board");
+        System.out.println("[no] Finish selection");
+
+        while (true) {
+            try {
+                System.out.print("Select equipment (or 'no' to finish): ");
+                String choice = scanner.nextLine().trim().toLowerCase();
+
+                if (choice.equals("no")) {
+                    equipmentBag.validateContents();
+                    break;
+                }
+
+                Equipment equipment = equipmentStorage.getEquipment(choice);
+                equipmentBag.addEquipment(equipment);
+                System.out.println("Added " + equipment.getName() + " to bag.");
+                System.out.println("Current bag: " + equipmentBag.getItems());
+
+            } catch (GameException e) {
+                System.out.println(e.getMessage());
+            }
         }
+
+        return equipmentBag;
     }
 }

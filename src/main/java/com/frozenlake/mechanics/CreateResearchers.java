@@ -1,4 +1,4 @@
-package FrozenLakePuzzle;
+package com.frozenlake.mechanics;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Random;

@@ -1,4 +1,4 @@
-package FrozenLakePuzzle;
+package com.frozenlake.mechanics;
 import java.util.Random;
 
 public class IceBlockPlacer {

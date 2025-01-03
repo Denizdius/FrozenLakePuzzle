@@ -5,17 +5,15 @@ import java.util.Set;
 import com.frozenlake.equipment.EquipmentBag;
 import com.frozenlake.mechanics.ExperimentGoals.ExperimentType;
 
-public class Researcher {
-    private final String id;
+public class Researcher extends AbstractGameEntity {
     private final String displayName;
-    private Position position;
     private EquipmentBag<Equipment> equipmentBag;
     private final Set<ExperimentType> completedExperiments;
     private boolean active;
     private boolean fallen;
 
-    public Researcher(String id) {
-        this.id = id;
+    public Researcher(String id, Position position) {
+        super(id, position);
         this.displayName = "Researcher " + id.substring(1); // Assumes format "R1", "R2", etc.
         this.equipmentBag = new EquipmentBag<>();
         this.completedExperiments = new HashSet<>();
@@ -23,20 +21,9 @@ public class Researcher {
         this.fallen = false;
     }
 
-    public String getId() {
-        return id;
-    }
-
+    @Override
     public String getDisplayName() {
         return displayName;
-    }
-
-    public Position getPosition() {
-        return position;
-    }
-
-    public void setPosition(Position position) {
-        this.position = position;
     }
 
     public EquipmentBag<Equipment> getEquipmentBag() {
@@ -55,6 +42,7 @@ public class Researcher {
         completedExperiments.add(experiment);
     }
 
+    @Override
     public boolean isActive() {
         return active;
     }
@@ -81,18 +69,5 @@ public class Researcher {
     @Override
     public String toString() {
         return displayName;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (!(obj instanceof Researcher)) return false;
-        Researcher other = (Researcher) obj;
-        return id.equals(other.id);
-    }
-
-    @Override
-    public int hashCode() {
-        return id.hashCode();
     }
 } 
